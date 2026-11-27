@@ -1,0 +1,12 @@
+{
+  "name": "mcu-watch-planner",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Every Marvel title in release order or story order, with progress tracking. No dependencies, no build step.",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "validate": "node scripts/validate.js",
+    "india": "node scripts/fetch-india.js"
+  }
+}
