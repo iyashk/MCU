@@ -29,7 +29,7 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 130px;
+  scroll-padding-top: 24px;
 }
 
 body {
@@ -760,8 +760,7 @@ svg.i {
 /* ============================= TOOLBAR ============================= */
 
 .toolbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 30;
   margin-top: 28px;
   padding: 10px 0;
@@ -793,9 +792,155 @@ svg.i {
   opacity: 0.6;
 }
 
-.toolbar.stuck .panel {
-  border-color: var(--line-2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 50px -18px rgba(0, 0, 0, 0.95);
+/* Floating Captain America shield that brings you back to the toolbar */
+.shield-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(24px) scale(0.7);
+  transition:
+    opacity 0.3s,
+    transform 0.5s cubic-bezier(0.3, 1.4, 0.5, 1),
+    visibility 0s 0.5s;
+}
+
+.shield-btn.show {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.modal-open .shield-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shield {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 58px;
+}
+
+.shield-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #1f4fd1 0 38%, #e62429 39% 58%, #f4f4f6 59% 78%, #e62429 79% 100%);
+  box-shadow:
+    inset 0 -4px 8px rgba(0, 0, 0, 0.35),
+    inset 0 3px 6px rgba(255, 255, 255, 0.35),
+    0 12px 28px -8px rgba(230, 36, 41, 0.75),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+  transition: transform 0.35s cubic-bezier(0.3, 1.4, 0.5, 1), box-shadow 0.3s;
+}
+
+.shield-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), transparent 45%);
+  pointer-events: none;
+}
+
+.shield .star {
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  height: 38%;
+  margin: auto;
+  fill: #fff;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.shield-up {
+  position: absolute;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #12141c;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+.shield-up svg.i {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+
+.shield-tip {
+  order: -1;
+  padding: 7px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  background: rgba(18, 20, 28, 0.94);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.2s, transform 0.25s;
+  pointer-events: none;
+}
+
+.shield-btn:hover .shield-face,
+.shield-btn:focus-visible .shield-face {
+  transform: translateY(-3px) rotate(-18deg);
+  box-shadow:
+    inset 0 -4px 8px rgba(0, 0, 0, 0.35),
+    inset 0 3px 6px rgba(255, 255, 255, 0.35),
+    0 16px 34px -8px rgba(230, 36, 41, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.shield-btn:hover .shield-tip,
+.shield-btn:focus-visible .shield-tip {
+  opacity: 1;
+  transform: none;
+}
+
+.shield-btn:focus-visible {
+  outline: none;
+}
+
+.shield-btn:focus-visible .shield-face {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+}
+
+.shield-btn.throw .shield-face {
+  animation: shield-throw 0.75s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes shield-throw {
+  0% {
+    transform: rotate(0) scale(1);
+  }
+  45% {
+    transform: translateY(-26px) rotate(400deg) scale(0.88);
+  }
+  100% {
+    transform: rotate(720deg) scale(1);
+  }
 }
 
 .tb-main {
@@ -2624,6 +2769,14 @@ a.ott:hover {
   }
   .sg-go span {
     display: none;
+  }
+  .shield-btn {
+    right: 16px;
+    bottom: 16px;
+  }
+  .shield {
+    width: 50px;
+    height: 50px;
   }
   .tb-filters {
     flex-wrap: nowrap;

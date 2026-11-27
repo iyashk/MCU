@@ -88,6 +88,7 @@ const ICON = {
   x: svg('<path d="M18 6 6 18M6 6l12 12"/>'),
   left: svg('<path d="m15 18-6-6 6-6"/>'),
   right: svg('<path d="m9 18 6-6-6-6"/>'),
+  up: svg('<path d="m18 15-6-6-6 6"/>'),
   target: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'),
   tv: svg('<rect x="2" y="7" width="20" height="15" rx="2"/><path d="m17 2-5 5-5-5"/>'),
   spark: svg('<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/>'),
@@ -614,6 +615,16 @@ app.innerHTML = `
   </div>
 </footer>
 
+<button class="shield-btn" id="to-controls" aria-label="Back to search and filters">
+  <span class="shield">
+    <span class="shield-face">
+      <svg class="star" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12.00,2.00 14.38,8.72 21.51,8.91 15.85,13.25 17.88,20.09 12.00,16.05 6.12,20.09 8.15,13.25 2.49,8.91 9.62,8.72"/></svg>
+    </span>
+    <span class="shield-up">${ICON.up}</span>
+  </span>
+  <span class="shield-tip">Back to search &amp; filters</span>
+</button>
+
 <div class="modal" id="modal" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="m-title" id="sheet"></div>
 </div>`;
@@ -634,6 +645,7 @@ const el = {
   ringFill: document.getElementById('ring-fill'),
   ringPct: document.getElementById('ring-pct'),
   toolbar: document.getElementById('toolbar'),
+  toControls: document.getElementById('to-controls'),
   modal: document.getElementById('modal'),
   sheet: document.getElementById('sheet'),
   tierGroup: document.getElementById('tier-group'),
@@ -1381,11 +1393,26 @@ el.search.addEventListener('focusout', (e) => {
   if (!el.search.contains(e.relatedTarget)) closeSuggestions();
 });
 
+let shieldFrame = 0;
 window.addEventListener(
   'scroll',
-  () => el.toolbar.classList.toggle('stuck', el.toolbar.getBoundingClientRect().top <= 0),
+  () => {
+    cancelAnimationFrame(shieldFrame);
+    shieldFrame = requestAnimationFrame(() =>
+      el.toControls.classList.toggle('show', el.toolbar.getBoundingClientRect().bottom < 0),
+    );
+  },
   { passive: true },
 );
+
+el.toControls.addEventListener('click', () => {
+  el.toControls.classList.remove('throw');
+  void el.toControls.offsetWidth;
+  el.toControls.classList.add('throw');
+  window.scrollTo({ top: el.toolbar.getBoundingClientRect().top + scrollY - 12, behavior: 'smooth' });
+});
+
+el.toControls.addEventListener('animationend', () => el.toControls.classList.remove('throw'));
 
 // Another tab of the site changed progress: pick it up so the two tabs can't overwrite each other.
 window.addEventListener('storage', (e) => {
