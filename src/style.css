@@ -474,20 +474,155 @@ svg.i {
   color: var(--muted);
 }
 
-.hpw {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.pace {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
-.hpw input {
-  width: 46px;
-  padding: 1px 4px;
-  border-radius: 6px;
-  border: 1px solid var(--line-2);
-  background: rgba(255, 255, 255, 0.06);
-  text-align: center;
+.pace-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pace-head label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pace-val {
   font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pace-val b {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.pace input[type='range'] {
+  --fill: linear-gradient(90deg, var(--red), var(--orange), var(--gold));
+  --track: rgba(255, 255, 255, 0.1);
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pace input[type='range']:focus {
+  outline: none;
+}
+
+.pace input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--fill) 0 / var(--p, 0%) 100% no-repeat, var(--track);
+}
+
+.pace input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--track);
+}
+
+.pace input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--fill);
+}
+
+.pace input[type='range']::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 138, 61, 0.28), 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.2s, transform 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pace input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 138, 61, 0.28), 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.pace input[type='range']:hover::-webkit-slider-thumb,
+.pace input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 7px rgba(255, 138, 61, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.pace input[type='range']:hover::-moz-range-thumb,
+.pace input[type='range']:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 7px rgba(255, 138, 61, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.pace input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.pace input[type='range']:active::-moz-range-thumb {
+  transform: scale(1.12);
+}
+
+.pace-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pace-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 4px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.pace-presets button small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.pace-presets button:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.pace-presets button[aria-pressed='true'] {
+  color: var(--text);
+  border-color: rgba(255, 138, 61, 0.55);
+  background: rgba(255, 138, 61, 0.12);
+}
+
+.pace-presets button[aria-pressed='true'] small {
+  color: var(--orange);
 }
 
 /* ============================= UP NEXT ============================= */

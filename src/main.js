@@ -102,6 +102,15 @@ const ICON = {
 
 /* ------------------------------ state ------------------------------ */
 
+const PACE_MAX = 70;
+const PACE_PRESETS = [
+  [4, 'Casual'],
+  [10, 'Steady'],
+  [21, 'Binge'],
+  [42, 'Marathon'],
+];
+const clampPace = (v) => Math.min(PACE_MAX, Math.max(1, Math.round(Number(v)) || 10));
+
 const defaults = () => ({
   mode: 'release',
   view: 'grid',
@@ -127,7 +136,7 @@ function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
     if (!saved || typeof saved !== 'object') return defaults();
-    return { ...defaults(), ...saved, progress: cleanProgress(saved.progress) };
+    return { ...defaults(), ...saved, progress: cleanProgress(saved.progress), hoursPerWeek: clampPace(saved.hoursPerWeek) };
   } catch {
     return defaults();
   }
@@ -204,7 +213,7 @@ async function importProgress(file) {
   const current = Object.keys(state.progress).length;
   if (current && !confirm(`Replace your current progress (${current} marks) with this backup (${n} marks)?`)) return;
   state.progress = progress;
-  if (Number(data.hoursPerWeek) > 0) state.hoursPerWeek = Number(data.hoursPerWeek);
+  if (Number(data.hoursPerWeek) > 0) state.hoursPerWeek = clampPace(data.hoursPerWeek);
   renderAll();
   toast(`Restored ${n} marks from backup`);
 }
@@ -512,6 +521,16 @@ app.innerHTML = `
             <div class="ring-txt"><b id="ring-pct">0%</b><span>watched</span></div>
           </div>
           <div class="pstats" id="pstats"></div>
+          <div class="pace">
+            <div class="pace-head">
+              <label for="hpw">Your watch pace</label>
+              <span class="pace-val" id="pace-val"></span>
+            </div>
+            <input type="range" id="hpw" min="1" max="${PACE_MAX}" step="1" aria-describedby="pace-val" />
+            <div class="pace-presets" role="group" aria-label="Pace presets">
+              ${PACE_PRESETS.map(([h, label]) => `<button data-pace="${h}" aria-pressed="false">${label}<small>${h}h</small></button>`).join('')}
+            </div>
+          </div>
           <div class="vault" id="vault">
             <span class="vault-dot"></span>
             <span class="vault-msg" id="vault-msg">Saved in this browser</span>
@@ -610,6 +629,8 @@ const el = {
   content: document.getElementById('content'),
   spotlight: document.getElementById('spotlight'),
   pstats: document.getElementById('pstats'),
+  hpw: document.getElementById('hpw'),
+  paceVal: document.getElementById('pace-val'),
   ringFill: document.getElementById('ring-fill'),
   ringPct: document.getElementById('ring-pct'),
   toolbar: document.getElementById('toolbar'),
@@ -839,8 +860,9 @@ function renderStats() {
   el.pstats.innerHTML = `
     <div class="pstat"><b>${done}<span style="color:var(--dim);font-size:14px"> / ${items.length}</span></b><span>titles done</span></div>
     <div class="pstat"><b>${Math.round(remaining / 60)}h</b><span>left to watch</span></div>
-    <div class="pstat"><b>${esc(finish)}</b><span class="hpw">finish at <input id="hpw" type="number" min="1" max="100" value="${state.hoursPerWeek}" aria-label="Hours per week"> h/wk</span></div>
+    <div class="pstat"><b>${esc(finish)}</b><span>finish date</span></div>
     <div class="pstat"><b>${upcoming}</b><span>coming soon</span></div>`;
+  syncPace();
 
   el.vault.classList.toggle('err', !storageOk);
   el.vaultMsg.textContent = storageOk ? 'Saved in this browser · no account needed' : 'Not saving: browser storage is blocked';
@@ -851,6 +873,15 @@ function renderStats() {
         state.doomsday ? 'Doomsday prep' : `${state.mode} order`
       }`
     : 'Nothing matches these filters';
+}
+
+function syncPace() {
+  const h = state.hoursPerWeek;
+  if (Number(el.hpw.value) !== h) el.hpw.value = String(h);
+  el.hpw.style.setProperty('--p', `${((h - 1) / (PACE_MAX - 1)) * 100}%`);
+  el.hpw.setAttribute('aria-valuetext', `${h} hours a week`);
+  el.paceVal.innerHTML = `<b>${h}h</b> a week · ≈ ${esc(fmtRuntime((h * 60) / 7))} a day`;
+  for (const b of document.querySelectorAll('[data-pace]')) b.setAttribute('aria-pressed', String(Number(b.dataset.pace) === h));
 }
 
 function renderSpotlight() {
@@ -1236,6 +1267,14 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  const pace = target.closest('[data-pace]');
+  if (pace) {
+    state.hoursPerWeek = clampPace(pace.dataset.pace);
+    save();
+    renderStats();
+    return;
+  }
+
   if (target.closest('#export')) return exportProgress();
   if (target.closest('#import')) return el.importFile.click();
 
@@ -1267,11 +1306,8 @@ document.addEventListener('change', (e) => {
     const file = target.files?.[0];
     target.value = '';
     if (file) importProgress(file);
-  } else if (target.id === 'hpw') {
-    const v = Number(target.value);
-    state.hoursPerWeek = Number.isFinite(v) && v > 0 ? v : 10;
+  } else if (target === el.hpw) {
     save();
-    renderStats();
   }
 });
 
@@ -1295,6 +1331,11 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     el.q.focus();
   }
+});
+
+el.hpw.addEventListener('input', () => {
+  state.hoursPerWeek = clampPace(el.hpw.value);
+  renderStats();
 });
 
 let searchTimer;
