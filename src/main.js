@@ -111,7 +111,6 @@ const defaults = () => ({
   hideDone: false,
   splits: true,
   hoursPerWeek: 10,
-  query: '',
   spoilerTipHidden: false,
   progress: {}, // id -> 'w' (watched) | 's' (skipped)
 });
@@ -128,7 +127,7 @@ function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
     if (!saved || typeof saved !== 'object') return defaults();
-    return { ...defaults(), ...saved, progress: cleanProgress(saved.progress), query: '' };
+    return { ...defaults(), ...saved, progress: cleanProgress(saved.progress) };
   } catch {
     return defaults();
   }
@@ -144,8 +143,7 @@ let storageOk = true;
 
 function save() {
   try {
-    const { query, ...persisted } = state;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     storageOk = true;
   } catch {
     if (storageOk) toast("Couldn't save: this browser is blocking local storage", true);
@@ -256,14 +254,11 @@ function passes(t) {
   const group = KIND_GROUP[t.kind];
   if (group !== 'scene' && !state.kinds.includes(group)) return false;
   if (state.hideDone && status(t.id)) return false;
-  if (state.query) {
-    const hay = `${t.title} ${t.universe} ${t.when} ${t.note ?? ''} ${t.platform} ${t.release.slice(0, 4)}`.toLowerCase();
-    if (!state.query.split(/\s+/).every((w) => hay.includes(w))) return false;
-  }
   return true;
 }
 
-function currentItems() {
+/** Every entry of the current order before filters, with split seasons collapsed when splits are off. */
+function orderedEntries() {
   const entries = state.mode === 'release' ? RELEASE_ENTRIES : STORY_ENTRIES;
   const out = [];
   const seenParents = new Set();
@@ -278,9 +273,43 @@ function currentItems() {
         t = TITLE_BY_ID.get(t.parent);
       }
     }
-    if (passes(t)) out.push({ t, section: e.section });
+    out.push({ t, section: e.section });
   }
-  return out.map((it, i) => ({ ...it, n: i + 1 }));
+  return out;
+}
+
+function currentItems() {
+  return orderedEntries()
+    .filter((e) => passes(e.t))
+    .map((it, i) => ({ ...it, n: i + 1 }));
+}
+
+/* ------------------------------ search ------------------------------ */
+
+const SEARCH_HAY = new Map(
+  TITLES.map((t) => [t.id, `${t.title} ${t.universe} ${t.when} ${t.note ?? ''} ${t.platform} ${t.release.slice(0, 4)}`.toLowerCase()]),
+);
+
+/** Titles in the current order that match every word, ignoring filters. Title matches rank first. */
+function searchTitles(query) {
+  const words = query.split(/\s+/);
+  const seen = new Set();
+  const hits = [];
+  for (const { t } of orderedEntries()) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    if (!words.every((w) => SEARCH_HAY.get(t.id).includes(w))) continue;
+    const name = t.title.toLowerCase();
+    const rank = name.startsWith(query)
+      ? 0
+      : ` ${name}`.includes(` ${query}`)
+        ? 1
+        : words.every((w) => name.includes(w))
+          ? 2
+          : 3;
+    hits.push({ t, rank });
+  }
+  return hits.sort((a, b) => a.rank - b.rank).map((h) => h.t);
 }
 
 const nextOf = (items) => items.find((i) => !status(i.t.id) && !isUpcoming(i.t)) ?? null;
@@ -510,7 +539,10 @@ app.innerHTML = `
           <button data-mode="release">${ICON.film} Release</button>
           <button data-mode="story">${ICON.hourglass} Story</button>
         </div>
-        <label class="search">${ICON.search}<input id="q" type="search" placeholder="Search titles, characters, years, platforms…" autocomplete="off" /><kbd>/</kbd></label>
+        <div class="search" id="search">
+          ${ICON.search}<input id="q" type="search" placeholder="Search titles, characters, years, platforms…" autocomplete="off" role="combobox" aria-label="Search titles" aria-autocomplete="list" aria-controls="suggest" aria-expanded="false" /><kbd>/</kbd>
+          <div class="suggest" id="suggest" role="listbox" aria-label="Matching titles" hidden></div>
+        </div>
         <button class="preset" id="doom" data-doom="1" title="Only the titles picked by Countdown to Doom">${ICON.flame}<span class="pl">Doomsday prep</span><small></small></button>
         <div class="seg icons" role="group" aria-label="Layout">
           <button data-view="grid" title="Poster grid" aria-label="Poster grid">${ICON.grid}</button>
@@ -569,6 +601,8 @@ app.innerHTML = `
 
 const el = {
   q: document.getElementById('q'),
+  search: document.getElementById('search'),
+  suggest: document.getElementById('suggest'),
   tierChips: document.getElementById('tier-chips'),
   kindChips: document.getElementById('kind-chips'),
   splitsWrap: document.getElementById('splits-wrap'),
@@ -753,7 +787,7 @@ function renderContent() {
   const nextId = nextOf(items)?.t.id;
 
   if (!items.length) {
-    el.content.innerHTML = `<div class="empty"><b>No titles here</b>Try turning a filter back on or clearing the search.</div>`;
+    el.content.innerHTML = `<div class="empty"><b>No titles here</b>Try turning a filter back on.</div>`;
     return;
   }
   el.content.innerHTML = lastGroups
@@ -875,7 +909,6 @@ function filtersChanged() {
   return (
     state.doomsday ||
     state.hideDone ||
-    Boolean(state.query) ||
     d.tiers.some((t) => !state.tiers.includes(t)) ||
     d.kinds.some((k) => !state.kinds.includes(k))
   );
@@ -938,8 +971,8 @@ function renderModal() {
   if (!t) return;
   const idx = lastItems.findIndex((i) => i.t.id === t.id);
   const item = lastItems[idx];
-  const prev = lastItems[idx - 1];
-  const next = lastItems[idx + 1];
+  const prev = idx > 0 ? lastItems[idx - 1] : undefined;
+  const next = idx >= 0 ? lastItems[idx + 1] : undefined;
   const st = status(t.id);
   const src = posterOf(t);
   const tier = TIER_BY_ID[t.tier];
@@ -959,7 +992,7 @@ function renderModal() {
     <div class="sheet-body">
       <div class="poster" style="--tc:${tier.color}">${posterHtml(t, { lazy: false })}<div class="shade"></div></div>
       <div>
-        <div class="m-kicker">${item ? `#${item.n} in ${state.mode} order` : ''}${item ? ' · ' : ''}${esc(item?.section ?? '')}</div>
+        <div class="m-kicker">${item ? `#${item.n} in ${state.mode} order · ${esc(item.section)}` : 'Hidden by your current filters'}</div>
         <h2 class="m-title" id="m-title">${esc(t.title)}</h2>
         <div class="pills">${pills}</div>
         <div class="facts">
@@ -977,6 +1010,7 @@ function renderModal() {
         <div class="m-actions">
           <button class="btn ${st === 'w' ? 'on' : 'primary'}" data-act="watch" data-id="${esc(t.id)}">${ICON.check} ${st === 'w' ? 'Watched' : 'Mark watched'}</button>
           <button class="btn ${st === 's' ? 'on' : ''}" data-act="skip" data-id="${esc(t.id)}">${ICON.skip} ${st === 's' ? 'Skipped' : 'Skip'}</button>
+          <button class="btn" data-act="roadmap" data-id="${esc(t.id)}">${ICON.target} View in roadmap</button>
         </div>
       </div>
     </div>
@@ -1012,6 +1046,108 @@ function locate(id) {
     [{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }],
     { duration: 700, delay: 350, easing: 'ease-in-out' },
   );
+  node.classList.remove('spot');
+  void node.offsetWidth;
+  node.classList.add('spot');
+  setTimeout(() => node.classList.remove('spot'), 2600);
+}
+
+/** Scrolls the full roadmap to a title, first clearing any filters that hide it. */
+function viewInRoadmap(id) {
+  closeSuggestions();
+  if (modalId) closeModal();
+  if (!lastItems.some((i) => i.t.id === id)) {
+    const d = defaults();
+    Object.assign(state, { tiers: d.tiers, kinds: d.kinds, doomsday: false, hideDone: false });
+    renderAll();
+    toast('Filters cleared so the title shows in the roadmap');
+  }
+  locate(id);
+}
+
+/* ------------------------------ suggestions ------------------------------ */
+
+const SUGGEST_LIMIT = 40;
+let suggestions = [];
+let activeSuggestion = -1;
+
+function highlight(title, words) {
+  const lower = title.toLowerCase();
+  const marks = new Array(title.length).fill(false);
+  for (const w of words) {
+    if (!w) continue;
+    for (let i = lower.indexOf(w); i !== -1; i = lower.indexOf(w, i + 1)) marks.fill(true, i, i + w.length);
+  }
+  let out = '';
+  for (let i = 0; i < title.length; ) {
+    let j = i;
+    while (j < title.length && marks[j] === marks[i]) j++;
+    const part = esc(title.slice(i, j));
+    out += marks[i] ? `<mark>${part}</mark>` : part;
+    i = j;
+  }
+  return out;
+}
+
+function suggestionHtml(t, i, words) {
+  const pos = lastItems.find((it) => it.t.id === t.id);
+  const meta = [KIND_LABEL[t.kind], year(t), state.mode === 'story' ? t.when : ''].filter(Boolean).map(esc);
+  meta.push(pos ? `#${pos.n} in ${state.mode} order` : '<em>Hidden by filters</em>');
+  return `
+    <div class="sg-item" role="option" id="sg-${i}" data-sg="${i}" aria-selected="false">
+      <div class="sg-thumb">${posterHtml(t)}</div>
+      <div class="sg-text">
+        <b>${highlight(t.title, words)}</b>
+        <span>${meta.join(' · ')}</span>
+      </div>
+      <button class="sg-go" data-sg-go="${esc(t.id)}" tabindex="-1" title="View in roadmap" aria-label="View ${esc(t.title)} in roadmap">${ICON.target}<span>Roadmap</span></button>
+    </div>`;
+}
+
+function renderSuggestions() {
+  const query = el.q.value.trim().toLowerCase();
+  if (!query) return closeSuggestions();
+  const words = query.split(/\s+/);
+  const hits = searchTitles(query);
+  suggestions = hits.slice(0, SUGGEST_LIMIT);
+  activeSuggestion = suggestions.length ? 0 : -1;
+  const more = hits.length - suggestions.length;
+  el.suggest.innerHTML = suggestions.length
+    ? `${suggestions.map((t, i) => suggestionHtml(t, i, words)).join('')}${
+        more > 0 ? `<div class="sg-foot">${more} more · keep typing to narrow it down</div>` : ''
+      }`
+    : `<div class="sg-foot">No titles match “${esc(el.q.value.trim())}”</div>`;
+  if (el.search.getBoundingClientRect().bottom + 320 > innerHeight) {
+    window.scrollBy({ top: el.toolbar.getBoundingClientRect().top, behavior: 'smooth' });
+  }
+  el.suggest.hidden = false;
+  el.q.setAttribute('aria-expanded', 'true');
+  syncActiveSuggestion();
+}
+
+function syncActiveSuggestion(scroll = false) {
+  el.suggest.querySelectorAll('.sg-item').forEach((node, i) => {
+    const on = i === activeSuggestion;
+    node.classList.toggle('active', on);
+    node.setAttribute('aria-selected', String(on));
+    if (on && scroll) node.scrollIntoView({ block: 'nearest' });
+  });
+  if (activeSuggestion >= 0) el.q.setAttribute('aria-activedescendant', `sg-${activeSuggestion}`);
+  else el.q.removeAttribute('aria-activedescendant');
+}
+
+function closeSuggestions() {
+  el.suggest.hidden = true;
+  el.q.setAttribute('aria-expanded', 'false');
+  el.q.removeAttribute('aria-activedescendant');
+  activeSuggestion = -1;
+}
+
+function selectSuggestion(i) {
+  const t = suggestions[i];
+  if (!t) return;
+  closeSuggestions();
+  openModal(t.id);
 }
 
 /* ------------------------------ events ------------------------------ */
@@ -1020,11 +1156,20 @@ document.addEventListener('click', (e) => {
   const target = e.target instanceof Element ? e.target : null;
   if (!target) return;
 
+  if (!target.closest('#search')) closeSuggestions();
+
+  const go = target.closest('[data-sg-go]');
+  if (go) return viewInRoadmap(go.dataset.sgGo);
+
+  const sg = target.closest('[data-sg]');
+  if (sg) return selectSuggestion(Number(sg.dataset.sg));
+
   const act = target.closest('[data-act]');
   if (act) {
     e.stopPropagation();
     const id = act.dataset.id;
     if (act.dataset.act === 'locate') return locate(id);
+    if (act.dataset.act === 'roadmap') return viewInRoadmap(id);
     toggle(id, act.dataset.act === 'watch' ? 'w' : 's');
     askPersist();
     refresh();
@@ -1096,8 +1241,7 @@ document.addEventListener('click', (e) => {
 
   if (target.closest('#clear-filters')) {
     const d = defaults();
-    Object.assign(state, { tiers: d.tiers, kinds: d.kinds, doomsday: false, hideDone: false, query: '' });
-    el.q.value = '';
+    Object.assign(state, { tiers: d.tiers, kinds: d.kinds, doomsday: false, hideDone: false });
     renderAll();
     return;
   }
@@ -1136,6 +1280,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const idx = lastItems.findIndex((i) => i.t.id === modalId);
+      if (idx < 0) return;
       const n = lastItems[idx + (e.key === 'ArrowRight' ? 1 : -1)];
       if (n) {
         modalId = n.t.id;
@@ -1155,10 +1300,44 @@ document.addEventListener('keydown', (e) => {
 let searchTimer;
 el.q.addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    state.query = el.q.value.trim().toLowerCase();
-    renderAll();
-  }, 120);
+  searchTimer = setTimeout(renderSuggestions, 80);
+});
+
+el.q.addEventListener('focus', () => {
+  if (el.q.value.trim()) renderSuggestions();
+});
+
+el.q.addEventListener('keydown', (e) => {
+  const open = !el.suggest.hidden;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!open) return renderSuggestions();
+    if (!suggestions.length) return;
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    activeSuggestion = (activeSuggestion + step + suggestions.length) % suggestions.length;
+    syncActiveSuggestion(true);
+  } else if (e.key === 'Enter' && open && activeSuggestion >= 0) {
+    e.preventDefault();
+    if (e.shiftKey) viewInRoadmap(suggestions[activeSuggestion].id);
+    else selectSuggestion(activeSuggestion);
+  } else if (e.key === 'Escape' && open) {
+    e.preventDefault();
+    closeSuggestions();
+  }
+});
+
+// Keeps focus in the input while clicking a suggestion, so the list doesn't close mid-click.
+el.suggest.addEventListener('mousedown', (e) => e.preventDefault());
+
+el.suggest.addEventListener('pointermove', (e) => {
+  const node = e.target instanceof Element ? e.target.closest('[data-sg]') : null;
+  if (!node || Number(node.dataset.sg) === activeSuggestion) return;
+  activeSuggestion = Number(node.dataset.sg);
+  syncActiveSuggestion();
+});
+
+el.search.addEventListener('focusout', (e) => {
+  if (!el.search.contains(e.relatedTarget)) closeSuggestions();
 });
 
 window.addEventListener(
